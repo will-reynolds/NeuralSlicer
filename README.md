@@ -9,98 +9,46 @@
 ## Abstract
 We introduce a novel neural network-based computational pipeline as a representation-agnostic slicer for multi-axis 3D printing. This advanced slicer can work on models with diverse representations and intricate topology. The approach involves employing neural networks to establish a deformation mapping, defining a scalar field in the space surrounding an input model. Isosurfaces are subsequently extracted from this field to generate curved layers for 3D printing. Creating a differentiable pipeline enables us to optimize the mapping through loss functions directly defined on the field gradients as the local printing directions. New loss functions have been introduced to meet the manufacturing objectives of support-free and strength reinforcement. Our new computation pipeline relies less on the initial values of the field and can generate slicing results with significantly improved performance. [Video Link](https://www.youtube.com/watch?v=qNm1ierKuUk)
 
-## Installation
-
-Please compile the S3_Slicer code with QMake in the following link before this setup.
-
-### **Platform**: Ubuntu 20.02 + Python 3.8
-
-We suggest using Anaconda as the virtual environment.
-
-### Install Steps: 
-
-### Setp 0: Compile the [S^3-Slicer](https://github.com/zhangty019/S3_DeformFDM) code with QMake for the printing field to slicers.
-
-1. Add a pushbutton in the file '/S3_DeformFDM/ShapeLab/MainWindow.ui'
-2. Create a correspondence slot function on_pushButtonXXX_Clicked() in '/S3_DeformFDM/ShapeLab/MainWindow.h' and '/S3_DeformFDM/ShapeLab/MainWindow.cpp', and copy the realization from file 'S3Slicer.cpp'.
-
-
-### Step 1: Create and config the Python environment.
-
-```
-git clone https://github.com/RyanTaoLiu/NeuralSlicer
-cd NeuralSlicer
-conda create -n NNSlicer python=3.8
-conda activate NNSlicer
-conda install pytorch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0 cudatoolkit=11.3 -c pytorch
-pip install tqdm numpy scipy pymeshlab pyvista tetgen trimesh einops comet_ml 
-```
-
-(Optional)if you would like to use docker, just download from the docker-hub,
-```
-docker pull ryantaoliu/nnslicer
-```
-or directly build from local
-```
-docker build . -t nnslicer
-```
-
 ![](DataSet/figures/pipline.jpg)
 
-## Usage
+## Installation
 
-For the example of spiral fish,
-### Step 0: Files Location
-Download datafiles from [google drive](https://drive.google.com/drive/folders/19bvwt9CdLHqdVBGZUZ3-ex9OD24y7bOu?usp=sharing)
-and replace to the data folder.
+To create and config the Python environment:
+- Run `make env`
+- Run `conda activate neural_slicer`
+- Run `make install-dev`
 
+To be able to run demos, let's also get some data files downloaded:
+- Download datafiles from [Google Drive](https://drive.google.com/drive/folders/19bvwt9CdLHqdVBGZUZ3-ex9OD24y7bOu?usp=sharing)
+and add to a `data` directory.
 
-Optional use this code to download data(need to install gdown and tarfile)
-```
-python .\utils\data_download.py
-```
+### Explanation of data files
 
-**Input:**
+**Inputs:**
+- Model file tet-files in `data/TET_MODEL`,
+- Cage file obj-files in `data/cage`, 
+- FEA output file (using Voigt notation) txt-files in `data/fem_result`. 
 
-Model file like tet-file lies in $PWD/data/TET_MODEL,
+**Outputs:**
+Results live in in `data/results/{exp_name}/{date_time}`, where:
+- *.obj shows the deformed boundary of models and cages
+- *.txt shows the new position of points in models or cages (can be read by S3Slicer)
+- *.ckpt is the check point file for neural network parameters.
 
-Cage file obj-file lies in $PWD/data/cage, 
-
-FEA output file(using Voigt notation) is a txt file, it lies in $PWD/data/fem_result. 
-
-**Output:**
-The result lies in $PWD/data/results/{exp_name}/{date_time}, where includes,
-
-*.obj shows the deformed boundary of models and cages, 
-
-*.txt shows the new position of points in models or cages(can read by S3Slicer), 
-
-*.ckpt is the check point file for neural network parameters.
-
-Examples can be found in related folders.
+## Examples
 
 ### Step 1: Cage-based Field Generation
-We first optimize the printing direction field via Neural Slicer, as
+Printing direction field optimisation via Neural Slicer:
 
 ```
 python main.py --exp_name spiral_fish --mesh spiral_fish.tet --cage None --stress None --wSF 1 --wSR 0 --wSQ 0 --wOP 0 --wRigid 100 --wConstraints 5 --wScaling 10 --wQuaternion 10 --nstep 5000 --wQuaternion 0.01 --lock_bottom --beta 2
 ```
 
-Or by docker
-```
-docker run --gpus all -v $PWD:/usr/src/NNSlicer  -w /usr/src/NNSlicer --rm nnslicer python main.py --exp_name earrings_wc --mesh earring_wc_wb.tet --cage None.obj --stress None.txt --wSF 1 --wSR 0 --wSQ 0 --wOP 0 --wRigid 100 --wConstraints 5 --wScaling 10 --wQuaternion 10 --nstep 20000 --wQuaternion 0.01 --optimizer adam_directly --lock_bottom --beta 2
-```
-
-If using other models/options, help documents can be checked here.
-```
-python main.py --help
-```
-
-### Step 2: Cage-based layers Generation
+### Step 2: Cage-based layers Generation [TO REVIEW]
 Then achieve the cage-based layers by S^3-Slicer.
 And remesh via meshlab, more details in the project [S^3-Slicer](https://github.com/zhangty019/S3_DeformFDM)
 
-### Step 3: Model-based layers Generation(more details will be added further)
+### Step 3: Model-based layers Generation [TO REVIEW]
 Run the following code to get the final layers by boolean.
 ```
 python ./utils/slicer_cut_by_implicitFunction.py
