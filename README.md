@@ -15,7 +15,6 @@ We introduce a novel neural network-based computational pipeline as a representa
 
 To create and config the Python environment:
 - Run `make env`
-- Run `conda activate neural_slicer`
 - Run `make install-dev`
 
 To be able to run demos, let's also get some data files downloaded:
@@ -38,11 +37,7 @@ Results live in in `data/results/{exp_name}/{date_time}`, where:
 ## Examples
 
 ### Step 1: Cage-based Field Generation
-Printing direction field optimisation via Neural Slicer:
-
-```
-python main.py --exp_name spiral_fish --mesh spiral_fish.tet --cage None --stress None --wSF 1 --wSR 0 --wSQ 0 --wOP 0 --wRigid 100 --wConstraints 5 --wScaling 10 --wQuaternion 10 --nstep 5000 --wQuaternion 0.01 --lock_bottom --beta 2
-```
+Printing direction field optimisation via Neural Slicer: `make test`
 
 ### Step 2: Cage-based layers Generation [TO REVIEW]
 Then achieve the cage-based layers by S^3-Slicer.
@@ -51,9 +46,8 @@ And remesh via meshlab, more details in the project [S^3-Slicer](https://github.
 ### Step 3: Model-based layers Generation [TO REVIEW]
 Run the following code to get the final layers by boolean.
 ```
-python ./utils/slicer_cut_by_implicitFunction.py
+uv run python ./utils/slicer_cut_by_implicitFunction.py
 ```
-
 
 ![](DataSet/figures/printingResult.jpg)
 ## Reference
