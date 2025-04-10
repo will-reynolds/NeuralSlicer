@@ -502,14 +502,14 @@ class ARAP_deformation:
         e1 = elem_nodes[:, 1, :] - elem_nodes[:, 0, :]
         e2 = elem_nodes[:, 2, :] - elem_nodes[:, 0, :]
         e3 = elem_nodes[:, 3, :] - elem_nodes[:, 0, :]
-        vol = (e3 * (e1.cross(e2))).sum(1) / 6
+        vol = (e3 * torch.linalg.cross(e1, e2)).sum(1) / 6
 
         height = torch.zeros((self.mesh_elem.shape[0], 4, 3)).float().to(self.device)
         for i in range(4):
             face = faces_idx[i]
             e1 = elem_nodes[:, face[1], :] - elem_nodes[:, face[0], :]
             e2 = elem_nodes[:, face[2], :] - elem_nodes[:, face[0], :]
-            h = e1.cross(e2)
+            h = torch.linalg.cross(e1, e2)
             # height[:, i, :] = torch.nn.functional.normalize(h) * (vol/h.norm(dim=1)).unsqueeze(-1).expand(-1,3)
             height[:, i, :] = h / (vol * 3).unsqueeze(-1).expand(-1, 3) / 2
         self.mesh_elem_height = height
@@ -527,14 +527,14 @@ class ARAP_deformation:
         e1 = elem_nodes[:, 1, :] - elem_nodes[:, 0, :]
         e2 = elem_nodes[:, 2, :] - elem_nodes[:, 0, :]
         e3 = elem_nodes[:, 3, :] - elem_nodes[:, 0, :]
-        vol = (e3 * (e1.cross(e2))).sum(1) / 6
+        vol = (e3 * (torch.linalg.cross(e1, e2))).sum(1) / 6
 
         height = torch.zeros((self.elem_th.shape[0], 4, 3)).float().to(self.device)
         for i in range(4):
             face = faces_idx[i]
             e1 = elem_nodes[:, face[1], :] - elem_nodes[:, face[0], :]
             e2 = elem_nodes[:, face[2], :] - elem_nodes[:, face[0], :]
-            h = e1.cross(e2)
+            h = torch.linalg.cross(e1, e2)
             # height[:, i, :] = torch.nn.functional.normalize(h) * (vol/h.norm(dim=1)).unsqueeze(-1).expand(-1,3)
             height[:, i, :] = h / (vol * 3).unsqueeze(-1).expand(-1, 3) / 2
         self.cage_elem_height = height
