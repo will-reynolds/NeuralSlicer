@@ -1,5 +1,7 @@
 import math
 import torch
+import pyvista as pv
+import scipy.sparse as ssp
 
 from utils.quernion import *
 from utils.fileIO import *
@@ -1019,7 +1021,7 @@ class ARAP_deformation:
             theta = self.paramaters["theta"]
             nLnR = gradient[self.mesh_elemAdjacent, :]  # n*2*3
             nL, nR = nLnR[:, 0, :], nLnR[:, 1, :]
-            nLCrossnR = torch.cross(nL, nR)
+            nLCrossnR = torch.linalg.cross(nL, nR)
             localCollisionFree = nLCrossnR.norm(2).abs() - torch.sin(theta)
             lc = torch.nn.ReLU(localCollisionFree).mean()
         return _lambda * (pd + lc)

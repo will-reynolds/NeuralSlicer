@@ -1,11 +1,13 @@
 import os.path as osp
 import sys
+import shutil
 
 from comet_ml import Experiment
 from deformationOptimization import deformationOptimization
 
 from utils.fileIO import *
 from utils.argument_parsers import get_init_parser
+from utils.generateCage import generateCage
 from utils.virtualCometExperment import virtualCometExperment
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
