@@ -1,8 +1,8 @@
 from multiprocessing import Pool
 
 import pymeshlab
-import pymp
-import glob, os
+import glob
+import os
 import shutil
 
 filter_script_path = "./remesh_operation.mlx"

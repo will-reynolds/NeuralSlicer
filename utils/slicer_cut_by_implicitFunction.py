@@ -4,11 +4,9 @@ from abc import ABC
 import pyvista
 import pyvista as pv
 import numpy as np
-import scipy as scp
 import pyacvd
 import openmesh as om
 
-import multiprocessing as mp
 from utils.pv_tetIO import *
 
 class IOFileName:
@@ -201,7 +199,7 @@ def main_spiral_fish(diffCone=False):
         if newLayer.number_of_points > 0:
             isolated_components = newLayer.split_bodies()
             for component in isolated_components:
-                if not iofileName.layer_id in numberofSublayers.keys():
+                if iofileName.layer_id not in numberofSublayers.keys():
                     numberofSublayers[iofileName.layer_id] = 0
                 else:
                     numberofSublayers[iofileName.layer_id] += 1

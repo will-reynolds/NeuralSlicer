@@ -1,7 +1,5 @@
 import math
 import torch
-import trimesh
-from torch.nn.functional import normalize
 
 from utils.quernion import *
 from utils.fileIO import *
@@ -57,46 +55,42 @@ class ARAP_deformation:
         self.optMeshNodes = None
         self.optCageNodes = None
 
-        self.doubleQuaternion = kwargs.get('doubleQuaternion', False)
+        self.doubleQuaternion = kwargs.get("doubleQuaternion", False)
         self.weights = {
-            'wConstraints': kwargs.get('wConstraints', 1),
-            'wSF': kwargs.get('wSF', 0.8) + 1e-9,
-            'wSR': kwargs.get('wSR', 0.1) + 1e-9,
-            'wSQ': kwargs.get('wSQ', 0.1) + 1e-9,
-            'wOP': kwargs.get('wOP', 0) + 1e-9,
-
-            'wSF_Lattice': kwargs.get('wSF_Lattice', 0) + 1e-9,
-            'wSR_Lattice': kwargs.get('wSR_Lattice', 0) + 1e-9,
-            'wSF_Shell': kwargs.get('wSF_Shell', 0) + 1e-9,
-            'wSR_Shell': kwargs.get('wSR_Shell', 0) + 1e-9,
-            'wSF_Tube':kwargs.get('wSF_Tube', 0) + 1e-9,
-            'wSR_Tube': kwargs.get('wSR_Tube', 0) + 1e-9,
-
-            'wRegulation': kwargs.get('wRegulation', 1e-4),
-            'wRegulation1': kwargs.get('wRegulation1', 1e4),
-
-            'wRigid': kwargs.get('wRigid', 1e2),
-            'wRigidInSameElement': 100,
-            'wScaling': kwargs.get('wScaling', 1e2),
-            'wQuaternion': kwargs.get('wQuaternion', 1e2),
-            'wThickness': kwargs.get('wThickness', 1e2)
+            "wConstraints": kwargs.get("wConstraints", 1),
+            "wSF": kwargs.get("wSF", 0.8) + 1e-9,
+            "wSR": kwargs.get("wSR", 0.1) + 1e-9,
+            "wSQ": kwargs.get("wSQ", 0.1) + 1e-9,
+            "wOP": kwargs.get("wOP", 0) + 1e-9,
+            "wSF_Lattice": kwargs.get("wSF_Lattice", 0) + 1e-9,
+            "wSR_Lattice": kwargs.get("wSR_Lattice", 0) + 1e-9,
+            "wSF_Shell": kwargs.get("wSF_Shell", 0) + 1e-9,
+            "wSR_Shell": kwargs.get("wSR_Shell", 0) + 1e-9,
+            "wSF_Tube": kwargs.get("wSF_Tube", 0) + 1e-9,
+            "wSR_Tube": kwargs.get("wSR_Tube", 0) + 1e-9,
+            "wRegulation": kwargs.get("wRegulation", 1e-4),
+            "wRegulation1": kwargs.get("wRegulation1", 1e4),
+            "wRigid": kwargs.get("wRigid", 1e2),
+            "wRigidInSameElement": 100,
+            "wScaling": kwargs.get("wScaling", 1e2),
+            "wQuaternion": kwargs.get("wQuaternion", 1e2),
+            "wThickness": kwargs.get("wThickness", 1e2),
         }
 
         self.paramaters = {
-            'alpha': np.deg2rad(kwargs.get('alpha', 45)),
-            'beta': np.deg2rad(kwargs.get('beta', 5)),
-            'grammar': np.deg2rad(kwargs.get('grammar', 5)),
-            'dp': np.array([0, 1, 0]),
-            'maxStressPercent': 5,
-
-            'theta': np.deg2rad(kwargs.get('theta', 45)),
+            "alpha": np.deg2rad(kwargs.get("alpha", 45)),
+            "beta": np.deg2rad(kwargs.get("beta", 5)),
+            "grammar": np.deg2rad(kwargs.get("grammar", 5)),
+            "dp": np.array([0, 1, 0]),
+            "maxStressPercent": 5,
+            "theta": np.deg2rad(kwargs.get("theta", 45)),
         }
-        self.dp = torch.from_numpy(self.paramaters['dp']).float().to(self.device)
-        self.lockBottom = kwargs.get('lock_bottom', False)
+        self.dp = torch.from_numpy(self.paramaters["dp"]).float().to(self.device)
+        self.lockBottom = kwargs.get("lock_bottom", False)
 
         self.fillPoint = self.dp * 1e5
 
-        self.maxStressPercent = 1. - self.paramaters['maxStressPercent'] / 100
+        self.maxStressPercent = 1.0 - self.paramaters["maxStressPercent"] / 100
         self.w_lattice = 1
         self.w_shell = 1
 
@@ -111,10 +105,15 @@ class ARAP_deformation:
     def getFixedPoints(self, boundaryPointIdx, vertices):
         # set fixed points in mesh(return index)
         if self.lockBottom:
-            bottomYValue = vertices[boundaryPointIdx][:, 1].min() + 1e-2*(vertices[boundaryPointIdx][:, 1].max()-vertices[boundaryPointIdx][:, 1].min())
+            bottomYValue = vertices[boundaryPointIdx][:, 1].min() + 1e-2 * (
+                vertices[boundaryPointIdx][:, 1].max()
+                - vertices[boundaryPointIdx][:, 1].min()
+            )
             # bottomYValue = -16 #0.15
             # bottomYValue = 3
-            fixPointsIdx = np.argwhere(vertices[boundaryPointIdx][:, 1] < bottomYValue).flatten()
+            fixPointsIdx = np.argwhere(
+                vertices[boundaryPointIdx][:, 1] < bottomYValue
+            ).flatten()
         else:
             fixPointsIdx = []
         return fixPointsIdx
@@ -128,21 +127,24 @@ class ARAP_deformation:
 
         # ARAP(LSQ) is to solve Qx = b
         """
-        #patch load vtm form file
+        # patch load vtm form file
 
         self.useVtm = False
         if isinstance(mesh, pv.MultiBlock):
             self.useVtm = True
             self.blocks = mesh
-            if 'solid' in self.blocks.keys():
-                self.mesh = self.blocks['solid']
-                mesh = tetMesh(self.blocks['solid'].points, self.blocks['solid'].cells.reshape((-1, 5))[:, 1:])
-            if 'lattice' in self.blocks.keys():
-                self.lattice = self.blocks['lattice']
-            if 'shell' in self.blocks.keys():
-                self.shell = self.blocks['shell']
-            if 'tube' in self.blocks.keys():
-                self.tube = self.blocks['tube']
+            if "solid" in self.blocks.keys():
+                self.mesh = self.blocks["solid"]
+                mesh = tetMesh(
+                    self.blocks["solid"].points,
+                    self.blocks["solid"].cells.reshape((-1, 5))[:, 1:],
+                )
+            if "lattice" in self.blocks.keys():
+                self.lattice = self.blocks["lattice"]
+            if "shell" in self.blocks.keys():
+                self.shell = self.blocks["shell"]
+            if "tube" in self.blocks.keys():
+                self.tube = self.blocks["tube"]
 
         # stress
         if stress is None:
@@ -155,23 +157,42 @@ class ARAP_deformation:
             tau_max_value[np.argwhere(tau_max_value < 0)] = 0
             self.tau_max_value = torch.from_numpy(tau_max_value).float().to(self.device)
             self.max5percent_tau_value = np.sort(tau_max_value.copy())[
-                int(tau_max_value.shape[0] * self.maxStressPercent)]
-            self.max5percent_tau_idx = torch.argwhere(self.tau_max_value > self.max5percent_tau_value)
+                int(tau_max_value.shape[0] * self.maxStressPercent)
+            ]
+            self.max5percent_tau_idx = torch.argwhere(
+                self.tau_max_value > self.max5percent_tau_value
+            )
 
         # mesh init
         self.tet_mesh = mesh
-        mesh_boundary_node_idx, mesh_boudary_face_idx, mesh_boudary_face_elem_idx = getVolumeMeshBoundary(mesh.elem)
+        mesh_boundary_node_idx, mesh_boudary_face_idx, mesh_boudary_face_elem_idx = (
+            getVolumeMeshBoundary(mesh.elem)
+        )
         self.mesh_boudary_face = mesh_boudary_face_idx
         self.mesh_node = torch.tensor(mesh.node).float().to(self.device)
-        self.mesh_boundary_node_idx = torch.tensor(mesh_boundary_node_idx).long().to(self.device)
-        self.mesh_boudary_face_idx = torch.tensor(mesh_boudary_face_idx).long().to(self.device)
-        self.mesh_boudary_face_elem_idx = torch.tensor(mesh_boudary_face_elem_idx).long().to(self.device)
-        mesh_inner_elem_idx = list(set(list(range(mesh.elem.shape[0]))) - set(mesh_boudary_face_elem_idx))
-        self.mesh_inner_elem_idx = torch.tensor(mesh_inner_elem_idx).long().to(self.device)
+        self.mesh_boundary_node_idx = (
+            torch.tensor(mesh_boundary_node_idx).long().to(self.device)
+        )
+        self.mesh_boudary_face_idx = (
+            torch.tensor(mesh_boudary_face_idx).long().to(self.device)
+        )
+        self.mesh_boudary_face_elem_idx = (
+            torch.tensor(mesh_boudary_face_elem_idx).long().to(self.device)
+        )
+        mesh_inner_elem_idx = list(
+            set(list(range(mesh.elem.shape[0]))) - set(mesh_boudary_face_elem_idx)
+        )
+        self.mesh_inner_elem_idx = (
+            torch.tensor(mesh_inner_elem_idx).long().to(self.device)
+        )
         mesh_elem_node = mesh.node[mesh.elem]
         mesh_elem_center = mesh_elem_node.mean(axis=1)
-        mesh_elem_node_minus_center = mesh_elem_node - np.expand_dims(mesh_elem_center, 1).repeat(4, axis=1)
-        mesh_elem_node_minus_center_th = torch.from_numpy(mesh_elem_node_minus_center).float()
+        mesh_elem_node_minus_center = mesh_elem_node - np.expand_dims(
+            mesh_elem_center, 1
+        ).repeat(4, axis=1)
+        mesh_elem_node_minus_center_th = torch.from_numpy(
+            mesh_elem_node_minus_center
+        ).float()
         NMC = mesh_elem_node_minus_center_th
         NMC_T = torch.transpose(NMC, 1, 2)
         # self.mesh_elem_R_inv = (NMC^T @ NMC)^-1 @ NMC
@@ -184,7 +205,9 @@ class ARAP_deformation:
             node = cage.node
             elem = cage.elem
             # newV, newF = tetrahedron_generate_from_mesh(cage)
-            weights_elem_idx, weights_bt_cood = getWeightsMatrix(mesh, self.tet_mesh.node)
+            weights_elem_idx, weights_bt_cood = getWeightsMatrix(
+                mesh, self.tet_mesh.node
+            )
             boundaryNodeIdx, boundaryFace, _ = getVolumeMeshBoundary(elem)
             self.cage_boudary_V, self.cage_boudary_F = boundaryNodeIdx, boundaryFace
             self.mesh_elem = torch.from_numpy(mesh.elem).long().to(self.device)
@@ -197,17 +220,25 @@ class ARAP_deformation:
             self.cage_boudary_V, self.cage_boudary_F = newV, newF
             self.tet_cage = tetMesh(node, elem)
             boundaryNodeIdx, boundaryFace, _ = getVolumeMeshBoundary(elem)
-            weights_elem_idx, weights_bt_cood = getWeightsMatrix(self.tet_cage, self.tet_mesh.node)
+            weights_elem_idx, weights_bt_cood = getWeightsMatrix(
+                self.tet_cage, self.tet_mesh.node
+            )
 
             self.mesh_elem = torch.from_numpy(mesh.elem).long().to(self.device)
-            self.mesh_elem_R_inv = torch.bmm(torch.linalg.inv(torch.bmm(NMC_T, NMC)), NMC_T).to(self.device)
+            self.mesh_elem_R_inv = torch.bmm(
+                torch.linalg.inv(torch.bmm(NMC_T, NMC)), NMC_T
+            ).to(self.device)
 
         fixPointsIdx = self.getFixedPoints(boundaryNodeIdx, node)
         elemCenter = np.zeros(shape=(elem.shape[0] * 4, 3))
         # get the shell of mesh
         self.elementAdjacent = getElementAdjacent(elem)
         self.mesh_elemAdjacent = getElementAdjacent(mesh.elem)
-        self.mesh_vvAdjacent = torch.from_numpy(getVVAdjacent(self.mesh_boudary_face)).long().to(self.device)
+        self.mesh_vvAdjacent = (
+            torch.from_numpy(getVVAdjacent(self.mesh_boudary_face))
+            .long()
+            .to(self.device)
+        )
         self.elem_th = torch.from_numpy(elem).long().to(self.device)
         self.node_th = torch.from_numpy(node).float().to(self.device)
 
@@ -221,14 +252,18 @@ class ARAP_deformation:
         totalVol = 0
         for eIdx, eit in enumerate(elem):
             cellCenter = node[eit].mean(0)
-            elemCenter[eIdx * 4:eIdx * 4 + 4, :] = cellCenter[np.newaxis, :].repeat(4, 0)
+            elemCenter[eIdx * 4 : eIdx * 4 + 4, :] = cellCenter[np.newaxis, :].repeat(
+                4, 0
+            )
             vol = abs(np.linalg.det(np.hstack((node[eit], np.ones((4, 1))))) / 6)
             totalVol += vol
             for vIdx, vit in enumerate(eit):
                 rowE[eIdx * 4 + vIdx] = eIdx * 4 + vIdx
                 colE[eIdx * 4 + vIdx] = vit
 
-        E = ssp.coo_matrix((dataE, (rowE, colE)), shape=(4 * elem.shape[0], node.shape[0]))
+        E = ssp.coo_matrix(
+            (dataE, (rowE, colE)), shape=(4 * elem.shape[0], node.shape[0])
+        )
         rowN = np.zeros(4 * 4 * elem.shape[0])
         colN = np.zeros(4 * 4 * elem.shape[0])
         dataN = np.zeros(4 * 4 * elem.shape[0])
@@ -241,16 +276,20 @@ class ARAP_deformation:
                 else:
                     dataN[4 * i + j] = -0.25
 
-        N = ssp.coo_matrix((dataN, (rowN, colN)), shape=(4 * elem.shape[0], 4 * elem.shape[0]))
+        N = ssp.coo_matrix(
+            (dataN, (rowN, colN)), shape=(4 * elem.shape[0], 4 * elem.shape[0])
+        )
         QShape = (N @ E).tocoo()
 
         colBNM = boundaryNodeIdx
 
         # set regulation item
-        dataBNM = torch.ones(boundaryNodeIdx.shape[0]) * self.weights['wRegulation']
-        dataBNM[fixPointsIdx] = self.weights['wRegulation1']
+        dataBNM = torch.ones(boundaryNodeIdx.shape[0]) * self.weights["wRegulation"]
+        dataBNM[fixPointsIdx] = self.weights["wRegulation1"]
 
-        toBoundaryNodeMatrix = ssp.coo_matrix((dataBNM, (colBNM, colBNM)), shape=(node.shape[0], node.shape[0]))
+        toBoundaryNodeMatrix = ssp.coo_matrix(
+            (dataBNM, (colBNM, colBNM)), shape=(node.shape[0], node.shape[0])
+        )
         QRegulation = toBoundaryNodeMatrix.tocoo()
         pRegulation = (torch.from_numpy(toBoundaryNodeMatrix @ node)).float()
 
@@ -267,11 +306,11 @@ class ARAP_deformation:
         QTSize0 = Q.shape[1]
         QTSize1 = Q.shape[0]
 
-        '''
+        """
         # TODO pytorch 1.9 cannot support sparse matrix in several gpus 
         QT = torch.sparse_coo_tensor(indices=(Q.col, Q.row), values=Q.data,
                                      size=(Q.shape[1], Q.shape[0])).float()
-        '''
+        """
         nodeMinusElemCenter = torch.from_numpy(QShape @ node).float()
         nodeMinusElemCenter = nodeMinusElemCenter.reshape(-1, 4, 3)  # RM[N,4,3]
 
@@ -280,7 +319,13 @@ class ARAP_deformation:
         self.boundaryNodeIdx, self.boundaryFace = boundaryNodeIdx, boundaryFace
         self.nodeMinusElemCenter = nodeMinusElemCenter.to(self.device)
         self.QTQCholesky = QTQCholesky.to(self.device)
-        self.QT = (QTCol.to(self.device), QTRow.to(self.device), QTValue.to(self.device), QTSize0, QTSize1)
+        self.QT = (
+            QTCol.to(self.device),
+            QTRow.to(self.device),
+            QTValue.to(self.device),
+            QTSize0,
+            QTSize1,
+        )
         self.pRegulation = pRegulation.to(self.device)
         self.newF_th = torch.tensor(self.cage_boudary_F).long().to(self.device)
 
@@ -288,80 +333,159 @@ class ARAP_deformation:
         self.elemCenter = torch.from_numpy(_elemCenter).float().to(self.device)
 
         #
-        self.weights_elem_idx = torch.from_numpy(weights_elem_idx).long().to(self.device)
+        self.weights_elem_idx = (
+            torch.from_numpy(weights_elem_idx).long().to(self.device)
+        )
         self.weights_bt_cood = torch.from_numpy(weights_bt_cood).float().to(self.device)
 
         self.initScalar2GradientMesh()
 
         # only used for cage Method
         if self.useVtm and self.use_cage:
-            if self.weights['wSR'] > 1e-9:
+            if self.weights["wSR"] > 1e-9:
                 # get tau_max_5top percent value
-                all_tau_max_value = np.hstack(mit.cell_data['tau_max_value'] for mit in self.blocks)
+                all_tau_max_value = np.hstack(
+                    mit.cell_data["tau_max_value"] for mit in self.blocks
+                )
                 all_tau_max_value_max = all_tau_max_value.max()
                 all_tau_max_value /= all_tau_max_value_max
                 all_tau_max_value[np.argwhere(all_tau_max_value < 0)] = 0
                 all_max5percent_tau_value = np.sort(all_tau_max_value.copy())[
-                    int(all_tau_max_value.shape[0] * self.maxStressPercent)]
+                    int(all_tau_max_value.shape[0] * self.maxStressPercent)
+                ]
                 # all_max5percent_tau_idx = torch.argwhere(all_tau_max_value > all_max5percent_tau_value)
                 self.max5percent_tau_value = all_max5percent_tau_value
                 # get solid average volume
 
-
             # get Lattice and/or Shell
-            if self.weights['wSF_Lattice'] > 1e-9 or self.weights['wSR_Lattice'] > 1e-9:
-                lattice_weights_elem_idx, lattice_weights_bt_cood = getWeightsMatrix(self.tet_cage, self.lattice.points)
-                self.lattice_weights_elem_idx = torch.from_numpy(lattice_weights_elem_idx).long().to(self.device)
-                self.lattice_weights_bt_cood = torch.from_numpy(lattice_weights_bt_cood).float().to(self.device)
-                self.lattice_node = torch.from_numpy(self.lattice.points).float().to(self.device)
-                self.lattice_elem = torch.from_numpy(self.lattice.cells.reshape((-1, 3))[:, 1:]).long().to(self.device)
-                if self.weights['wSR_Lattice'] > 1e-9:
-                    self.lattice_tau_max = torch.from_numpy(self.lattice.cell_data['tau_max']).float().to(self.device)
-                    lattice_tau_max_value = torch.from_numpy(self.lattice.cell_data['tau_max_value'])
-                    self.lattice_tau_max_value = lattice_tau_max_value / all_tau_max_value_max
-                    self.lattice_tau_max_value[np.argwhere(lattice_tau_max_value < 0)] = 0
+            if self.weights["wSF_Lattice"] > 1e-9 or self.weights["wSR_Lattice"] > 1e-9:
+                lattice_weights_elem_idx, lattice_weights_bt_cood = getWeightsMatrix(
+                    self.tet_cage, self.lattice.points
+                )
+                self.lattice_weights_elem_idx = (
+                    torch.from_numpy(lattice_weights_elem_idx).long().to(self.device)
+                )
+                self.lattice_weights_bt_cood = (
+                    torch.from_numpy(lattice_weights_bt_cood).float().to(self.device)
+                )
+                self.lattice_node = (
+                    torch.from_numpy(self.lattice.points).float().to(self.device)
+                )
+                self.lattice_elem = (
+                    torch.from_numpy(self.lattice.cells.reshape((-1, 3))[:, 1:])
+                    .long()
+                    .to(self.device)
+                )
+                if self.weights["wSR_Lattice"] > 1e-9:
+                    self.lattice_tau_max = (
+                        torch.from_numpy(self.lattice.cell_data["tau_max"])
+                        .float()
+                        .to(self.device)
+                    )
+                    lattice_tau_max_value = torch.from_numpy(
+                        self.lattice.cell_data["tau_max_value"]
+                    )
+                    self.lattice_tau_max_value = (
+                        lattice_tau_max_value / all_tau_max_value_max
+                    )
+                    self.lattice_tau_max_value[
+                        np.argwhere(lattice_tau_max_value < 0)
+                    ] = 0
                     self.lattice_tau_max_value.float().to(self.device)
-                    self.lattice_max5percent_tau_idx = torch.argwhere(self.lattice_tau_max_value > all_max5percent_tau_value)
+                    self.lattice_max5percent_tau_idx = torch.argwhere(
+                        self.lattice_tau_max_value > all_max5percent_tau_value
+                    )
 
-            if self.weights['wSF_Shell'] > 1e-9 or self.weights['wSR_Shell'] > 1e-9:
-                shell_weights_elem_idx, shell_weights_bt_cood = getWeightsMatrix(self.tet_cage, self.shell.points)
-                self.shell_weights_elem_idx = torch.from_numpy(shell_weights_elem_idx).long().to(self.device)
-                self.shell_weights_bt_cood = torch.from_numpy(shell_weights_bt_cood).float().to(self.device)
-                self.shell_node = torch.from_numpy(self.shell.points).float().to(self.device)
-                self.shell_elem = torch.from_numpy(self.shell.cells.reshape((-1, 4))[:, 1:]).long().to(self.device)
-                if self.weights['wSR_Shell'] > 1e-9:
-                    self.shell_tau_max = torch.from_numpy(self.shell.cell_data['tau_max']).float().to(self.device)
-                    shell_tau_max_value = torch.from_numpy(self.shell.cell_data['tau_max_value'])
-                    self.shell_tau_max_value = shell_tau_max_value / all_tau_max_value_max
+            if self.weights["wSF_Shell"] > 1e-9 or self.weights["wSR_Shell"] > 1e-9:
+                shell_weights_elem_idx, shell_weights_bt_cood = getWeightsMatrix(
+                    self.tet_cage, self.shell.points
+                )
+                self.shell_weights_elem_idx = (
+                    torch.from_numpy(shell_weights_elem_idx).long().to(self.device)
+                )
+                self.shell_weights_bt_cood = (
+                    torch.from_numpy(shell_weights_bt_cood).float().to(self.device)
+                )
+                self.shell_node = (
+                    torch.from_numpy(self.shell.points).float().to(self.device)
+                )
+                self.shell_elem = (
+                    torch.from_numpy(self.shell.cells.reshape((-1, 4))[:, 1:])
+                    .long()
+                    .to(self.device)
+                )
+                if self.weights["wSR_Shell"] > 1e-9:
+                    self.shell_tau_max = (
+                        torch.from_numpy(self.shell.cell_data["tau_max"])
+                        .float()
+                        .to(self.device)
+                    )
+                    shell_tau_max_value = torch.from_numpy(
+                        self.shell.cell_data["tau_max_value"]
+                    )
+                    self.shell_tau_max_value = (
+                        shell_tau_max_value / all_tau_max_value_max
+                    )
                     self.shell_tau_max_value[np.argwhere(shell_tau_max_value < 0)] = 0
                     self.shell_tau_max_value.float().to(self.device)
-                    self.shell_max5percent_tau_idx = torch.argwhere(self.shell_tau_max_value > all_max5percent_tau_value)
+                    self.shell_max5percent_tau_idx = torch.argwhere(
+                        self.shell_tau_max_value > all_max5percent_tau_value
+                    )
 
-            if self.weights['wSF_Tube'] > 1e-9 or self.weights['wSR_Tube'] > 1e-9:
-                tube_weights_elem_idx, tube_weights_bt_cood = getWeightsMatrix(self.tet_cage, self.tube.points)
-                self.tube_weights_elem_idx = torch.from_numpy(tube_weights_elem_idx).long().to(self.device)
-                self.tube_weights_bt_cood = torch.from_numpy(tube_weights_bt_cood).float().to(self.device)
-                self.tube_node = torch.from_numpy(self.tube.points).float().to(self.device)
-                self.tube_elem = torch.from_numpy(self.tube.cells.reshape((-1, 3))[:, 1:]).long().to(self.device)
-                if self.weights['wSR_Tube'] > 1e-9:
-                    self.tube_tau_max = torch.from_numpy(self.tube.cell_data['tau_max']).float().to(self.device)
-                    tube_tau_max_value = self.tube.cell_data['tau_max_value']
-                    self.tube_tau_max_value = torch.from_numpy(tube_tau_max_value / all_tau_max_value_max)
+            if self.weights["wSF_Tube"] > 1e-9 or self.weights["wSR_Tube"] > 1e-9:
+                tube_weights_elem_idx, tube_weights_bt_cood = getWeightsMatrix(
+                    self.tet_cage, self.tube.points
+                )
+                self.tube_weights_elem_idx = (
+                    torch.from_numpy(tube_weights_elem_idx).long().to(self.device)
+                )
+                self.tube_weights_bt_cood = (
+                    torch.from_numpy(tube_weights_bt_cood).float().to(self.device)
+                )
+                self.tube_node = (
+                    torch.from_numpy(self.tube.points).float().to(self.device)
+                )
+                self.tube_elem = (
+                    torch.from_numpy(self.tube.cells.reshape((-1, 3))[:, 1:])
+                    .long()
+                    .to(self.device)
+                )
+                if self.weights["wSR_Tube"] > 1e-9:
+                    self.tube_tau_max = (
+                        torch.from_numpy(self.tube.cell_data["tau_max"])
+                        .float()
+                        .to(self.device)
+                    )
+                    tube_tau_max_value = self.tube.cell_data["tau_max_value"]
+                    self.tube_tau_max_value = torch.from_numpy(
+                        tube_tau_max_value / all_tau_max_value_max
+                    )
                     self.tube_tau_max_value[np.argwhere(tube_tau_max_value < 0)] = 0
                     self.tube_tau_max_value.float().to(self.device)
-                    self.tube_max5percent_tau_idx = torch.argwhere(self.tube_tau_max_value > all_max5percent_tau_value)
+                    self.tube_max5percent_tau_idx = torch.argwhere(
+                        self.tube_tau_max_value > all_max5percent_tau_value
+                    )
 
-            if self.weights['wSR'] > 1e-9:
-            # for solid stress
-                tau_max, tau_max_value = self.mesh.cell_data['tau_max'], self.mesh.cell_data['tau_max_value']
+            if self.weights["wSR"] > 1e-9:
+                # for solid stress
+                tau_max, tau_max_value = (
+                    self.mesh.cell_data["tau_max"],
+                    self.mesh.cell_data["tau_max_value"],
+                )
                 self.tau_max = torch.from_numpy(tau_max).float().to(self.device)
-                self.tau_max_value = torch.from_numpy(tau_max_value/ all_tau_max_value_max)
+                self.tau_max_value = torch.from_numpy(
+                    tau_max_value / all_tau_max_value_max
+                )
                 self.tau_max_value[np.argwhere(tau_max_value < 0)] = 0
                 self.tau_max_value.float().to(self.device)
-                self.max5percent_tau_idx = torch.argwhere(self.tau_max_value > all_max5percent_tau_value)
+                self.max5percent_tau_idx = torch.argwhere(
+                    self.tau_max_value > all_max5percent_tau_value
+                )
 
         elif self.useVtm:
-            raise Exception("lattice or shell loss calculation must use user given cage!")
+            raise Exception(
+                "lattice or shell loss calculation must use user given cage!"
+            )
 
     def initScalar2GradientMesh(self):
         elem_nodes = self.mesh_node[self.mesh_elem]  # nx4x3
@@ -369,11 +493,9 @@ class ARAP_deformation:
         # to calculate the gradient of every element
         # knows the vertices and weights of every elem
         # get the gradient nx3
-        faces_idx = torch.asarray([[0, 1, 2],
-                                   [0, 3, 1],
-                                   [0, 2, 3],
-                                   [1, 3, 2]],
-                                  dtype=torch.long)
+        faces_idx = torch.asarray(
+            [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]], dtype=torch.long
+        )
         # first h = (v1-v0) \cross (v2-v0)
         e1 = elem_nodes[:, 1, :] - elem_nodes[:, 0, :]
         e2 = elem_nodes[:, 2, :] - elem_nodes[:, 0, :]
@@ -396,11 +518,9 @@ class ARAP_deformation:
         # to calculate the gradient of every element
         # knows the vertices and weights of every elem
         # get the gradient nx3
-        faces_idx = torch.asarray([[0, 1, 2],
-                                   [0, 3, 1],
-                                   [0, 2, 3],
-                                   [1, 3, 2]],
-                                  dtype=torch.long)
+        faces_idx = torch.asarray(
+            [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]], dtype=torch.long
+        )
         # first h = (v1-v0) \cross (v2-v0)
         e1 = elem_nodes[:, 1, :] - elem_nodes[:, 0, :]
         e2 = elem_nodes[:, 2, :] - elem_nodes[:, 0, :]
@@ -447,9 +567,11 @@ class ARAP_deformation:
         """
         nBatch = quaternion.shape[0]
         QTQCholesky = self.QTQCholesky.expand(nBatch, -1, -1).to(quaternion.device)
-        QT = torch.sparse_coo_tensor(indices=torch.vstack((self.QT[0], self.QT[1])),
-                                     values=self.QT[2],
-                                     size=(self.QT[3], self.QT[4])).float()
+        QT = torch.sparse_coo_tensor(
+            indices=torch.vstack((self.QT[0], self.QT[1])),
+            values=self.QT[2],
+            size=(self.QT[3], self.QT[4]),
+        ).float()
         pRegulation = self.pRegulation.expand(nBatch, -1, -1)
         nodeMinusElemCenter = self.nodeMinusElemCenter.expand(nBatch, -1, -1, -1)
 
@@ -478,7 +600,7 @@ class ARAP_deformation:
         newBoundaryNodes = newNodes[:, self.boundaryNodeIdx, :]
         return newBoundaryNodes, newNodes
 
-    def sigmoid(self, value, interruptValue=0., var=50):
+    def sigmoid(self, value, interruptValue=0.0, var=50):
         """
         param value: input value
         param interruptValue: sigmoid interrupt value
@@ -489,17 +611,17 @@ class ARAP_deformation:
         return 1 - torch.sigmoid(var * (value - interruptValue))
 
     def rigidLoss(self, scaleMatrix):
-        w = self.weights['wRigid']
+        w = self.weights["wRigid"]
         if w < 1e-7:
             return torch.tensor(0).float().to(scaleMatrix.device)
         else:
-            loss1 = abs(scaleMatrix - 1).norm('fro')
-            loss1 /= scaleMatrix.flatten().shape[0]
+            loss1 = abs(scaleMatrix - 1).norm("fro")
+            loss1_normalized = loss1 / scaleMatrix.flatten().shape[0]
             loss2 = scaleMatrix.squeeze(0).var(dim=1).mean()
-            return w * loss1 + self.weights['wRigidInSameElement'] * loss2
+            return w * loss1_normalized + self.weights["wRigidInSameElement"] * loss2
 
     def rigidLossMesh(self, scaleMatrix):
-        w = self.weights['wRigid']
+        w = self.weights["wRigid"]
         if w < 1e-7:
             return torch.tensor(0).float().to(scaleMatrix.device)
         else:
@@ -507,52 +629,61 @@ class ARAP_deformation:
             # loss = (affineMatrix - eyeMatrix).norm(p='fro', dim=(1, 2)).mean()
             # return w * loss
 
-            '''
+            """
             loss = (abs(scaleMatrix) + 1 / (abs(scaleMatrix) + 1e-9) - 2).norm('fro')
             loss /= scaleMatrix.flatten().shape[0]
-            '''
+            """
             loss = abs(scaleMatrix - 1).sum(1).mean()
             return w * loss
 
     def scaleLoss(self, scaleMatrix):
-        w = self.weights['wScaling']
+        w = self.weights["wScaling"]
         elementAdjacent = self.elementAdjacent
         if w < 1e-7:
             return torch.tensor(0).float().to(scaleMatrix.device)
         else:
-            loss = (scaleMatrix[:, elementAdjacent[0], :] - scaleMatrix[:, elementAdjacent[1], :]).norm('fro')
-            loss /= len(elementAdjacent[0])
-            return w * loss
+            loss = (
+                scaleMatrix[:, elementAdjacent[0], :]
+                - scaleMatrix[:, elementAdjacent[1], :]
+            ).norm("fro")
+            loss_normalized = loss / len(elementAdjacent[0])
+            return w * loss_normalized
 
     def scaleLossMesh(self, S):
-        w = self.weights['wScaling']
+        w = self.weights["wScaling"]
         elementAdjacent = self.mesh_elemAdjacent
         if w < 1e-7:
             return torch.tensor(0).float().to(S.device)
         else:
-            loss = (S[elementAdjacent[0], :] - S[elementAdjacent[1], :]).norm(p='fro')
+            loss = (S[elementAdjacent[0], :] - S[elementAdjacent[1], :]).norm(p="fro")
             loss = loss / len(elementAdjacent[0])
             return w * loss
 
     def quaternionLoss(self, quaternion):
-        w = self.weights['wQuaternion']
+        w = self.weights["wQuaternion"]
         elementAdjacent = self.elementAdjacent
         if w < 1e-7:
             return torch.tensor(0).float().to(quaternion.device)
         else:
-            loss = quaternion_multiply(quaternion[:, elementAdjacent[0], :],
-                                       quaternion_invert(quaternion[:, elementAdjacent[1], :]))
+            loss = quaternion_multiply(
+                quaternion[:, elementAdjacent[0], :],
+                quaternion_invert(quaternion[:, elementAdjacent[1], :]),
+            )
             loss = (abs(2 - 2 * loss[:, :, 0] * loss[:, :, 0])).sum()
             loss /= len(elementAdjacent[0])
             return w * loss
 
     def quaternionLossMesh(self, R):
-        w = self.weights['wQuaternion']
+        w = self.weights["wQuaternion"]
         elementAdjacent = self.mesh_elemAdjacent
         if w < 1e-7:
             return torch.tensor(0).float().to(R.device)
         else:
-            loss = (R[elementAdjacent[0], :, :] - R[elementAdjacent[1], :, :]).norm(p='fro', dim=(1, 2)).mean()
+            loss = (
+                (R[elementAdjacent[0], :, :] - R[elementAdjacent[1], :, :])
+                .norm(p="fro", dim=(1, 2))
+                .mean()
+            )
             return w * loss
 
     # the following loss(OP SF SQ SR) \in [-1(satisfy constraints), 0(else)]
@@ -566,7 +697,7 @@ class ARAP_deformation:
         parameter: overhangPointsAngle will be thought as 0
         """
 
-        w = self.weights['wOP']
+        w = self.weights["wOP"]
         if w < 1e-7:
             return torch.zeros((1)).float().to(self.device)
         newVertices_ = newVertices.squeeze(0)
@@ -574,8 +705,9 @@ class ARAP_deformation:
         overhangPointsAngle = np.deg2rad(90)
 
         newVertices_with_fardp = torch.vstack((newVertices_, self.fillPoint))
-        vj_minus_vi = newVertices_with_fardp[self.mesh_vvAdjacent] - \
-                      newVertices_.unsqueeze(1).expand(-1, self.mesh_vvAdjacent.shape[1], -1)
+        vj_minus_vi = newVertices_with_fardp[
+            self.mesh_vvAdjacent
+        ] - newVertices_.unsqueeze(1).expand(-1, self.mesh_vvAdjacent.shape[1], -1)
         vj_minus_vi_normalization = torch.nn.functional.normalize(vj_minus_vi, dim=2)
         e = vj_minus_vi_normalization
         e_dot_dp = (e * dp.expand(e.shape[0], e.shape[1], -1)).sum(2)
@@ -584,7 +716,9 @@ class ARAP_deformation:
         min_e_dot_dp, _ = e_dot_dp.min(1)
         # find overhang points with flag -1
         # overhang_points_flag = self.sigmoid(-min_e_dot_dp, math.cos(overhangPointsAngle) + 1e-9, 10)
-        overhang_points_flag = torch.nn.functional.relu(min_e_dot_dp - math.cos(overhangPointsAngle))
+        overhang_points_flag = torch.nn.functional.relu(
+            min_e_dot_dp - math.cos(overhangPointsAngle)
+        )
 
         # the second aggregation
         overhang_faces_flag, _ = overhang_points_flag[self.mesh_boudary_face_idx].max(1)
@@ -600,26 +734,26 @@ class ARAP_deformation:
         # filter = ((normalized_faceCenter-t).sign() + 1)/2
         # True Table
         #   Fliter 0  1
-        #loss  0  -1  0
+        # loss  0  -1  0
         #      1  -1  -1
 
         return -(1 - (overhang_faces_flag * filter)) * w
 
     def supportFreePunishmentLoss(self, newVertices):
         number_faces = self.mesh_boudary_face_idx.shape[0]
-        w = self.weights['wSF']
+        w = self.weights["wSF"]
         if w < 1e-7:
             return torch.zeros(number_faces).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters['alpha']
+        alpha = self.paramaters["alpha"]
         boundaryNormal = getNormal(newVertices, self.mesh_boudary_face_idx)
         n_dot_dp = (boundaryNormal * dp.expand(number_faces, -1)).sum(1)
 
-        #return -self.sigmoid(-n_dot_dp, math.sin(alpha)) * w
+        # return -self.sigmoid(-n_dot_dp, math.sin(alpha)) * w
 
         # add filter to dynamic remove bottom of model
-        '''
+        """
         v_woBatch = newVertices.squeeze(0)
         VF = v_woBatch[self.mesh_boudary_face_idx]
         faceCenter = VF.mean(axis=1)[:, 1]
@@ -628,29 +762,33 @@ class ARAP_deformation:
         normalized_faceCenter = faceCenter - faceCenterMins
         t = 0.05 * (faceCenterMaxs - faceCenterMins)
         filter = torch.nn.functional.hardtanh(normalized_faceCenter, 0, t.item())
-        '''
+        """
         filter = torch.zeros(number_faces).to(self.device) + 1
 
         # True Table
         #   Fliter 0  1
-        #loss  0  -1  0
+        # loss  0  -1  0
         #     -1  -1  -1
 
         # reduce the overhang faces
-        return ((1-self.sigmoid(-n_dot_dp, math.sin(alpha)) * filter)-1) * w
+        return ((1 - self.sigmoid(-n_dot_dp, math.sin(alpha)) * filter) - 1) * w
 
     def lattice_supportFreePunishmentLoss(self, newVertices):
         number_lattice = self.lattice_elem.shape[0]
-        w = self.weights['wSF_Lattice']
+        w = self.weights["wSF_Lattice"]
         if w < 1e-7:
             return torch.zeros(number_lattice).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters['alpha']
-        boundaryNormal = torch.nn.functional.normalize(newVertices[self.lattice_elem[:, 1]] - newVertices[self.lattice_elem[:, 0]], p=2, dim=1)
+        alpha = self.paramaters["alpha"]
+        boundaryNormal = torch.nn.functional.normalize(
+            newVertices[self.lattice_elem[:, 1]] - newVertices[self.lattice_elem[:, 0]],
+            p=2,
+            dim=1,
+        )
         n_dot_dp = (boundaryNormal * dp.expand(number_lattice, -1)).sum(1)
 
-        #return -self.sigmoid(-n_dot_dp, math.sin(alpha)) * w
+        # return -self.sigmoid(-n_dot_dp, math.sin(alpha)) * w
         filter = torch.zeros(number_lattice).to(self.device) + 1
 
         return ((1 - self.sigmoid(-abs(n_dot_dp), -math.sin(alpha)) * filter) - 1) * w
@@ -658,55 +796,59 @@ class ARAP_deformation:
 
     def tube_supportFreePunishmentLoss(self, newVertices):
         number_tube = self.tube_elem.shape[0]
-        w = self.weights['wSF_Tube']
+        w = self.weights["wSF_Tube"]
         if w < 1e-7:
             return torch.zeros(number_tube).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters['alpha']
-        boundaryNormal = torch.nn.functional.normalize(newVertices[self.lattice_elem[:, 0]]-newVertices[self.lattice_elem[:, 1]])
+        alpha = self.paramaters["alpha"]
+        boundaryNormal = torch.nn.functional.normalize(
+            newVertices[self.lattice_elem[:, 0]] - newVertices[self.lattice_elem[:, 1]]
+        )
         n_dot_dp = (boundaryNormal * dp.expand(number_tube, -1)).sum(1)
 
-        #return -self.sigmoid(-n_dot_dp, math.sin(alpha)) * w
+        # return -self.sigmoid(-n_dot_dp, math.sin(alpha)) * w
         filter = torch.zeros(number_tube).to(self.device) + 1
-         # reduce the overhang faces
-        return ((1-self.sigmoid(abs(n_dot_dp), math.sin(alpha)) * filter)-1) * w
+        # reduce the overhang faces
+        return ((1 - self.sigmoid(abs(n_dot_dp), math.sin(alpha)) * filter) - 1) * w
 
     def shell_supportFreePunishmentLoss(self, newVertices):
         number_faces = self.shell_elem.shape[0]
-        w = self.weights['wSF_Shell']
+        w = self.weights["wSF_Shell"]
         if w < 1e-7:
             return torch.zeros(number_faces).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters['alpha']
+        alpha = self.paramaters["alpha"]
         boundaryNormal = getNormal(newVertices, self.shell_elem)
         n_dot_dp = (boundaryNormal * dp.expand(number_faces, -1)).sum(1)
 
         # True Table
         #   Fliter 0  1
-        #loss  0  -1  0
+        # loss  0  -1  0
         #     -1  -1  -1
         filter = torch.zeros(number_faces).to(self.device) + 1
 
         # reduce the overhang faces
-        return ((1-self.sigmoid(abs(n_dot_dp), math.sin(alpha)) * filter)-1) * w
+        return ((1 - self.sigmoid(abs(n_dot_dp), math.sin(alpha)) * filter) - 1) * w
 
     def combinedSupportFreePunishmentLoss(self, newVertices):
         # non-support-free and overhang faces loss
-        if self.weights['wOP'] > 1e-7 and self.weights['wSF'] > 1e-7:
-            SF = self.supportFreePunishmentLoss(newVertices)  # 1 is non-support free faces
+        if self.weights["wOP"] > 1e-7 and self.weights["wSF"] > 1e-7:
+            SF = self.supportFreePunishmentLoss(
+                newVertices
+            )  # 1 is non-support free faces
             OF = self.overhangPointsPunishmentLoss(newVertices)  # -1 is overhang faces
             return SF + OF
 
         # only support free
-        elif self.weights['wOP'] < 1e-7 < self.weights['wSF']:
+        elif self.weights["wOP"] < 1e-7 < self.weights["wSF"]:
             return self.supportFreePunishmentLoss(newVertices)
         else:
             return torch.tensor([0]).float().to(self.device)
 
     def strengthReinforcePunishmentLoss(self, affine_matrix):
-        w = self.weights['wSR']
+        w = self.weights["wSR"]
         if w < 1e-7:
             return torch.zeros(affine_matrix.shape[0]).float().to(self.device)
 
@@ -715,10 +857,12 @@ class ARAP_deformation:
         flitter[Idx] = 1
 
         dp = self.dp
-        beta = self.paramaters['beta']
+        beta = self.paramaters["beta"]
         new_tau_max = torch.bmm(affine_matrix, self.tau_max.unsqueeze(-1)).squeeze(-1)
         new_tau_max = torch.nn.functional.normalize(new_tau_max, dim=1)
-        dp_dot_tau = (new_tau_max * dp.unsqueeze(0).expand(affine_matrix.shape[0], -1)).sum(1)
+        dp_dot_tau = (
+            new_tau_max * dp.unsqueeze(0).expand(affine_matrix.shape[0], -1)
+        ).sum(1)
 
         dp_less_beta = -self.sigmoid(dp_dot_tau.abs(), math.sin(beta))
         """
@@ -734,15 +878,17 @@ class ARAP_deformation:
         output: gradient in each element
         """
         elem_weight = tet_node_weight[self.mesh_elem]  # nx4
-        faces_opposite_node_idx = torch.asarray([3, 2, 1, 0],
-                                                dtype=torch.long)
+        faces_opposite_node_idx = torch.asarray([3, 2, 1, 0], dtype=torch.long)
 
         # first h = (v1-v0) \cross (v2-v0)
-        elem_gradient = torch.zeros((self.mesh_elem.shape[0], 3)).float().to(self.device)
+        elem_gradient = (
+            torch.zeros((self.mesh_elem.shape[0], 3)).float().to(self.device)
+        )
         for i in range(4):
             faces_opposite_node = faces_opposite_node_idx[i]
-            elem_gradient += self.mesh_elem_height[:, i, :] * \
-                             elem_weight[:, faces_opposite_node].unsqueeze(-1).expand(-1, 3)
+            elem_gradient += self.mesh_elem_height[:, i, :] * elem_weight[
+                :, faces_opposite_node
+            ].unsqueeze(-1).expand(-1, 3)
         return elem_gradient
 
     def scalar2GradientCage(self, cage_node_weight):
@@ -752,19 +898,21 @@ class ARAP_deformation:
         """
         # new_cage_node = cage_node_weight.squeeze(0)
         elem_weight = cage_node_weight[self.elem_th]  # nx4
-        faces_opposite_node_idx = torch.asarray([3, 2, 1, 0],
-                                                dtype=torch.long)
+        faces_opposite_node_idx = torch.asarray([3, 2, 1, 0], dtype=torch.long)
 
         # first h = (v1-v0) \cross (v2-v0)
-        cage_elem_gradient = torch.zeros((self.elem_th.shape[0], 3)).float().to(self.device)
+        cage_elem_gradient = (
+            torch.zeros((self.elem_th.shape[0], 3)).float().to(self.device)
+        )
         for i in range(4):
             faces_opposite_node = faces_opposite_node_idx[i]
-            cage_elem_gradient += self.cage_elem_height[:, i, :] * \
-                             elem_weight[:, faces_opposite_node].unsqueeze(-1).expand(-1, 3)
+            cage_elem_gradient += self.cage_elem_height[:, i, :] * elem_weight[
+                :, faces_opposite_node
+            ].unsqueeze(-1).expand(-1, 3)
         return cage_elem_gradient
 
     def strengthReinforcePunishmentLossByGradient(self, newVertices):
-        w = self.weights['wSR']
+        w = self.weights["wSR"]
         if w < 1e-7:
             return torch.zeros(self.mesh_elem.shape[0]).float().to(self.device)
         if newVertices.dim() == 3:
@@ -772,7 +920,7 @@ class ARAP_deformation:
         else:
             mesh_gradient = self.scalar2GradientMesh(newVertices[:, 1])
 
-        beta = self.paramaters['beta']
+        beta = self.paramaters["beta"]
         dp_dot_tau = (self.tau_max * mesh_gradient).sum(1)
 
         Idx = self.max5percent_tau_idx
@@ -781,66 +929,68 @@ class ARAP_deformation:
 
         # True Table
         #   Fliter 0  1
-        #loss  0  -1  0
+        # loss  0  -1  0
         #     -1  -1  -1
 
-        return ((1-self.sigmoid(dp_dot_tau.abs(), math.sin(beta))) * flitter - 1)*w
+        return ((1 - self.sigmoid(dp_dot_tau.abs(), math.sin(beta))) * flitter - 1) * w
 
     def lattice_strengthReinforcePunishmentLossByGradient(self, cage_gradient):
-        w = self.weights['wSR_Lattice']
+        w = self.weights["wSR_Lattice"]
         if w < 1e-7:
             return torch.zeros(self.lattice_elem.shape[0]).float().to(self.device)
 
-        beta = self.paramaters['beta']
-        lpd = cage_gradient[self.lattice_weights_elem_idx[self.lattice_elem]].mean(axis=1)
+        beta = self.paramaters["beta"]
+        lpd = cage_gradient[self.lattice_weights_elem_idx[self.lattice_elem]].mean(
+            axis=1
+        )
         dp_dot_tau = (self.lattice_tau_max * lpd).sum(1)
 
         Idx = self.lattice_max5percent_tau_idx
         flitter = torch.zeros(self.lattice_elem.shape[0]).float().to(self.device)
         flitter[Idx] = 1
-        return ((1-self.sigmoid(dp_dot_tau.abs(), math.sin(beta))) * flitter - 1)*w
+        return ((1 - self.sigmoid(dp_dot_tau.abs(), math.sin(beta))) * flitter - 1) * w
 
     def shell_strengthReinforcePunishmentLossByGradient(self, cage_gradient):
-        w = self.weights['wSR_Shell']
+        w = self.weights["wSR_Shell"]
         if w < 1e-7:
             return torch.zeros(self.shell_elem.shape[0]).float().to(self.device)
-        beta = self.paramaters['beta']
+        beta = self.paramaters["beta"]
         lpd = cage_gradient[self.shell_weights_elem_idx[self.shell_elem]].mean(axis=1)
         dp_dot_tau = (self.shell_tau_max * lpd).sum(1)
 
         Idx = self.shell_max5percent_tau_idx
         flitter = torch.zeros(self.shell_elem.shape[0]).float().to(self.device)
         flitter[Idx] = 1
-        return ((1-self.sigmoid(dp_dot_tau.abs(), math.sin(beta))) * flitter - 1)*w
+        return ((1 - self.sigmoid(dp_dot_tau.abs(), math.sin(beta))) * flitter - 1) * w
 
     def tube_strengthReinforcePunishmentLossByGradient(self, cage_gradient):
-        w = self.weights['wSR_Tube']
+        w = self.weights["wSR_Tube"]
         if w < 1e-7:
             return torch.zeros(self.tube_elem.shape[0]).float().to(self.device)
 
-        beta = self.paramaters['beta']
+        beta = self.paramaters["beta"]
         lpd = cage_gradient[self.tube_weights_elem_idx[self.tube_elem]].mean(axis=1)
         dp_dot_tau = (self.tube_tau_max * lpd).sum(1)
 
         Idx = self.tube_max5percent_tau_idx
         flitter = torch.zeros(self.tube_elem.shape[0]).float().to(self.device)
         flitter[Idx] = 1
-        return ((1-self.sigmoid(dp_dot_tau.abs(), math.sin(beta))) * flitter - 1)*w
+        return ((1 - self.sigmoid(dp_dot_tau.abs(), math.sin(beta))) * flitter - 1) * w
 
     def surfaceQualityPunishmentLoss(self, newVertices):
         number_faces = self.mesh_boudary_face_idx.shape[0]
-        w = self.weights['wSQ']
+        w = self.weights["wSQ"]
         if w < 1e-7:
             return torch.zeros(number_faces).float().to(self.device)
 
         dp = self.dp
-        grammar = self.paramaters['grammar']
+        grammar = self.paramaters["grammar"]
         boundaryNormal = getNormal(newVertices, self.mesh_boudary_face_idx)
         n_dot_dp = (boundaryNormal * dp.expand(number_faces, -1)).sum(1)
         return self.sigmoid(n_dot_dp.abs(), math.sin(grammar))
 
     def thicknessLossMesh(self, gradient):
-        w = self.weights['wThickness']
+        w = self.weights["wThickness"]
         self.thicknessConstant = 1
         if w < 1e-7:
             return torch.tensor(0).float().to(gradient.device)
@@ -849,24 +999,24 @@ class ARAP_deformation:
             return w * loss
 
     def printLimitionLossMesh(self, gradient):
-        w = self.weights['wThickness']
+        w = self.weights["wThickness"]
         if w < 1e-7:
             return torch.tensor(0).float().to(gradient.device)
         else:
-            loss = (gradient.norm(dim=1) - 1).norm('fro').mean()
+            loss = (gradient.norm(dim=1) - 1).norm("fro").mean()
             return w * loss
 
     def hardConstrains(self, gradient):
         # printing direction
-        _lambda = self.weights['_lambda']
+        _lambda = self.weights["_lambda"]
         pd, lc = 0, 0
-        if self.weights['printingDirection']:
+        if self.weights["printingDirection"]:
             printingDirection = gradient @ self.dp.expand(gradient.shape[0], -1).T
             pd = torch.nn.ReLU(printingDirection).mean()
 
         # local collision-free
-        if self.weights['localCollisionFree']:
-            theta = self.paramaters['theta']
+        if self.weights["localCollisionFree"]:
+            theta = self.paramaters["theta"]
             nLnR = gradient[self.mesh_elemAdjacent, :]  # n*2*3
             nL, nR = nLnR[:, 0, :], nLnR[:, 1, :]
             nLCrossnR = torch.cross(nL, nR)
@@ -876,26 +1026,32 @@ class ARAP_deformation:
 
     def latticeSupportFreeLoss(self, newVertices):
         number_edges = self.mesh_boundary_edge.shape[0]
-        w = self.weights['wSF_Lattice']
+        w = self.weights["wSF_Lattice"]
         if w < 1e-7:
             return torch.zeros(number_edges).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters['alpha']
+        alpha = self.paramaters["alpha"]
         directions = getEdgeDirection(newVertices, self.mesh_boundary_edge)
         direction_dot_dp = (directions * dp.expand(number_edges, -1)).sum(1).abs()
         return (self.sigmoid(direction_dot_dp, math.sin(alpha)) - 1).mean() * w
 
     def loss(self, inputQS, step):
         quaternion, scaleVector, quaternion2 = self.inputNormalized(inputQS)
-        newBoundaryNodes, newNodes = self.arap_deform(quaternion, scaleVector, quaternion2)
+        newBoundaryNodes, newNodes = self.arap_deform(
+            quaternion, scaleVector, quaternion2
+        )
         if self.use_cage:
             # Calculate flowing, affine_matrix and S in mesh
-            cage_flowing = (newNodes - torch.from_numpy(self.node).float().to(self.device)).squeeze(0)
+            cage_flowing = (
+                newNodes - torch.from_numpy(self.node).float().to(self.device)
+            ).squeeze(0)
             elem_th = self.elem_th
             cage_node2mesh = elem_th[self.weights_elem_idx, :]
             mesh_flowing = cage_flowing[cage_node2mesh]
-            mesh_vertices_flowing = torch.bmm(self.weights_bt_cood.unsqueeze(1), mesh_flowing).squeeze(1)
+            mesh_vertices_flowing = torch.bmm(
+                self.weights_bt_cood.unsqueeze(1), mesh_flowing
+            ).squeeze(1)
             new_mesh_vertices = self.mesh_node + mesh_vertices_flowing
             new_mesh_boundary_vertices = new_mesh_vertices[self.mesh_boundary_node_idx]
 
@@ -917,52 +1073,77 @@ class ARAP_deformation:
         _scalingLoss = self.scaleLoss(scaleVector)
         _rigidLoss = self.rigidLoss(scaleVector)
 
-        _combinedSupportFreePunishmentLoss = self.combinedSupportFreePunishmentLoss(new_mesh_boundary_vertices)
-        _strengthReinforcePunishmentLoss = self.strengthReinforcePunishmentLossByGradient(new_mesh_vertices)
-        _surfaceQualityPunishmentLoss = self.surfaceQualityPunishmentLoss(new_mesh_boundary_vertices)
+        _combinedSupportFreePunishmentLoss = self.combinedSupportFreePunishmentLoss(
+            new_mesh_boundary_vertices
+        )
+        _strengthReinforcePunishmentLoss = (
+            self.strengthReinforcePunishmentLossByGradient(new_mesh_vertices)
+        )
+        _surfaceQualityPunishmentLoss = self.surfaceQualityPunishmentLoss(
+            new_mesh_boundary_vertices
+        )
 
         # post-processing for SF SQ SR
         # for boundary elements
-        punishmentBoundaryLossAll = _combinedSupportFreePunishmentLoss + \
-                                    _strengthReinforcePunishmentLoss[self.mesh_boudary_face_elem_idx] + \
-                                    _surfaceQualityPunishmentLoss
+        punishmentBoundaryLossAll = (
+            _combinedSupportFreePunishmentLoss
+            + _strengthReinforcePunishmentLoss[self.mesh_boudary_face_elem_idx]
+            + _surfaceQualityPunishmentLoss
+        )
         self.initScalar2GradientCage()
         cageGradient = self.scalar2GradientCage(newNodes.squeeze(0)[:, 1])
-        
+
         # for inner elements
-        punishmentInnerLossList = _strengthReinforcePunishmentLoss[self.mesh_inner_elem_idx]
-        _punishmentLoss = (punishmentBoundaryLossAll.mean() * self.mesh_boudary_face_elem_idx.shape[0] +
-                           punishmentInnerLossList.mean() * self.mesh_inner_elem_idx.shape[0]) / \
-                          (self.mesh_boudary_face_elem_idx.shape[0] + self.mesh_inner_elem_idx.shape[0])
+        punishmentInnerLossList = _strengthReinforcePunishmentLoss[
+            self.mesh_inner_elem_idx
+        ]
+        _punishmentLoss = (
+            punishmentBoundaryLossAll.mean() * self.mesh_boudary_face_elem_idx.shape[0]
+            + punishmentInnerLossList.mean() * self.mesh_inner_elem_idx.shape[0]
+        ) / (
+            self.mesh_boudary_face_elem_idx.shape[0] + self.mesh_inner_elem_idx.shape[0]
+        )
 
         # loss for lattice and shell
-        if self.weights['wSR_Lattice'] > 1e-9 or self.weights['wSF_Lattice'] > 1e-9:
+        if self.weights["wSR_Lattice"] > 1e-9 or self.weights["wSF_Lattice"] > 1e-9:
             cage_node2lattice = elem_th[self.lattice_weights_elem_idx, :]
             lattice_flowing = cage_flowing[cage_node2lattice]
-            lattice_vertices_flowing = torch.bmm(self.lattice_weights_bt_cood.unsqueeze(1), lattice_flowing).squeeze(1)
+            lattice_vertices_flowing = torch.bmm(
+                self.lattice_weights_bt_cood.unsqueeze(1), lattice_flowing
+            ).squeeze(1)
             new_lattice_vertices = self.lattice_node + lattice_vertices_flowing
-            _lattice_punishmentLoss = (self.lattice_supportFreePunishmentLoss(new_lattice_vertices) +
-                                       self.lattice_strengthReinforcePunishmentLossByGradient(cageGradient)) * self.w_lattice
+            _lattice_punishmentLoss = (
+                self.lattice_supportFreePunishmentLoss(new_lattice_vertices)
+                + self.lattice_strengthReinforcePunishmentLossByGradient(cageGradient)
+            ) * self.w_lattice
             _punishmentLoss += _lattice_punishmentLoss.mean()
 
-
-        if self.weights['wSR_Shell'] > 1e-9 or self.weights['wSF_Shell'] > 1e-9:
+        if self.weights["wSR_Shell"] > 1e-9 or self.weights["wSF_Shell"] > 1e-9:
             # new_shell_vertices =
-            cage_node2shell= elem_th[self.shell_weights_elem_idx, :]
+            cage_node2shell = elem_th[self.shell_weights_elem_idx, :]
             shell_flowing = cage_flowing[cage_node2shell]
-            shell_vertices_flowing = torch.bmm(self.shell_weights_bt_cood.unsqueeze(1), shell_flowing).squeeze(1)
+            shell_vertices_flowing = torch.bmm(
+                self.shell_weights_bt_cood.unsqueeze(1), shell_flowing
+            ).squeeze(1)
             new_shell_vertices = self.shell_node + shell_vertices_flowing
-            _shell_punishmentLoss = (self.shell_supportFreePunishmentLoss(new_shell_vertices) +
-                                     self.shell_strengthReinforcePunishmentLossByGradient(cageGradient)) * self.w_shell
+            _shell_punishmentLoss = (
+                self.shell_supportFreePunishmentLoss(new_shell_vertices)
+                + self.shell_strengthReinforcePunishmentLossByGradient(cageGradient)
+            ) * self.w_shell
             _punishmentLoss += _shell_punishmentLoss.mean()
-            
-        _loss = _quaternionLoss + _scalingLoss + _rigidLoss + _punishmentLoss * self.weights['wConstraints']
+
+        _loss = (
+            _quaternionLoss
+            + _scalingLoss
+            + _rigidLoss
+            + _punishmentLoss * self.weights["wConstraints"]
+        )
 
         _loss_dict = {
-            '_loss': _loss,
-            '_quaternionLoss': _quaternionLoss,
-            '_scalingLoss': _scalingLoss,
-            '_rigidLoss': _rigidLoss,
-            '_punishmentLoss': _punishmentLoss * self.weights['wConstraints']
+            "_loss": _loss,
+            "_quaternionLoss": _quaternionLoss,
+            "_scalingLoss": _scalingLoss,
+            "_rigidLoss": _rigidLoss,
+            "_punishmentLoss": _punishmentLoss * self.weights["wConstraints"],
         }
         return _loss, _loss_dict

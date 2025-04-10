@@ -3,7 +3,6 @@ import os
 import numpy as np
 import pyvista as pv
 from utils.fileIO import *
-from slicer_cut_by_implicitFunction import generateVoronoi
 from scipy.spatial.kdtree import KDTree
 
 class VTKIO():

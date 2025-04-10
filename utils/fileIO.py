@@ -1,9 +1,7 @@
-import os
 import numpy as np
 from scipy.spatial import KDTree
 import trimesh
 from utils.tetrahedron_mesh_utils import *
-from functools import reduce
 
 class tetMesh():
     def __init__(self, v, e):

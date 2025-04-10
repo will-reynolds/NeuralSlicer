@@ -1,8 +1,6 @@
 import torch
 from torch import nn
 import math
-import torch
-from torch import nn
 import torch.nn.functional as F
 from einops import rearrange
 from utils.quernion import quaternion_multiply

@@ -1,13 +1,4 @@
-import os
-import os.path as osp
-from itertools import combinations, permutations
-from pdb import set_trace as strc
 
-import numpy as np
-import torch
-import trimesh
-from scipy.spatial import cKDTree as KDTree
-from tqdm import tqdm
 
 def str2bool(v):
     if isinstance(v, bool):

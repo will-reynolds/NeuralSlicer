@@ -1,9 +1,6 @@
-import pyvista as pv
 import tetgen
 import numpy as np
 import torch
-import scipy.sparse as ssp
-import trimesh
 
 
 def getVolumeMeshBoundary(elem):

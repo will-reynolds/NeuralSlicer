@@ -1,27 +1,25 @@
 import os.path as osp
 import sys
-import shutil
 
 from comet_ml import Experiment
 from deformationOptimization import deformationOptimization
 
 from utils.fileIO import *
 from utils.argument_parsers import get_init_parser
-from utils.generateCage import generateCage
 from utils.virtualCometExperment import virtualCometExperment
 
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cmd = sys.argv
     # load kwargs
     parser = get_init_parser()
     args = parser.parse_args()
 
     # load mesh, cage and stress
-    if args.mesh_name.endswith('tet'):
+    if args.mesh_name.endswith("tet"):
         mesh = loadTet(osp.join(args.mesh_dir, args.mesh_name))
-    elif args.mesh_name.endswith('vtm'):
+    elif args.mesh_name.endswith("vtm"):
         mesh = pv.read(osp.join(args.mesh_dir, args.mesh_name))
 
     # load cage or generate cage
@@ -44,17 +42,17 @@ if __name__ == '__main__':
     else:
         experiment = virtualCometExperment()
 
-    experiment.set_name(args.exp_name + '_' + args.id)
+    experiment.set_name(args.exp_name + "_" + args.id)
     experiment.add_tag(args.exp_name)
 
     if args.wSF >= 0.1:
-        experiment.add_tag('SF')
+        experiment.add_tag("SF")
     if args.wSQ >= 0.1:
-        experiment.add_tag('SQ')
+        experiment.add_tag("SQ")
     if args.wSR >= 0.1:
-        experiment.add_tag('SR')
+        experiment.add_tag("SR")
     if args.wOP >= 0.1:
-        experiment.add_tag('OP')
+        experiment.add_tag("OP")
 
     experiment.add_tag(args.optimizer)
 

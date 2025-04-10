@@ -1,5 +1,6 @@
 import pymeshlab
-import glob, os
+import glob
+import os
 
 filter_script_path = "./remesh_operation.mlx"
 

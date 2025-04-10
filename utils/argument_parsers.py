@@ -1,6 +1,5 @@
 from argparse import ArgumentParser
 from datetime import datetime
-from numpy import require
 # from utils.my_utils import str2bool
 
 def str2bool(v):

@@ -1,6 +1,5 @@
 import os
 import pyvista as pv
-import shutil
 
 
 def __generateCage(argString: str):

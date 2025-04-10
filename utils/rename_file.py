@@ -1,9 +1,4 @@
-import os
-import shutil
-import math
 
-import numpy as np
-import pyvista as pv
 
 
 class IOFileName:
