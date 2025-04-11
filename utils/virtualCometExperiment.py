@@ -5,9 +5,11 @@ class NoOp:
                 print(args)
             if len(kwargs):
                 print(kwargs)
+
         return method
 
+
 # generate a class that do nothing
-class virtualCometExperment(NoOp):
+class virtualCometExperiment(NoOp):
     def __init__(self):
-        print('Using the local Logger')
+        print("Using the local Logger")

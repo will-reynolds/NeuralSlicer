@@ -1,14 +1,14 @@
-import os.path as osp
+from pathlib import Path
 import sys
-import shutil
+import pyvista as pv
+import trimesh
 
 from comet_ml import Experiment
 from deformationOptimization import deformationOptimization
 
-from utils.fileIO import *
+from utils.fileIO import loadTet, loadStress
 from utils.argument_parsers import get_init_parser
-from utils.generateCage import generateCage
-from utils.virtualCometExperment import virtualCometExperment
+from utils.virtualCometExperiment import virtualCometExperiment
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -18,20 +18,23 @@ if __name__ == "__main__":
     parser = get_init_parser()
     args = parser.parse_args()
 
+    mesh_path = Path(args.mesh_dir) / args.mesh_name
     # load mesh, cage and stress
     if args.mesh_name.endswith("tet"):
-        mesh = loadTet(osp.join(args.mesh_dir, args.mesh_name))
+        mesh = loadTet(mesh_path)
     elif args.mesh_name.endswith("vtm"):
-        mesh = pv.read(osp.join(args.mesh_dir, args.mesh_name))
+        mesh = pv.read(mesh_path)
 
+    cage_path = Path(args.cage_dir) / args.cage_name
     # load cage or generate cage
-    if osp.exists(osp.join(args.cage_dir, args.cage_name)):
-        cage = trimesh.load(osp.join(args.cage_dir, args.cage_name))
+    if cage_path.is_file():
+        cage = trimesh.load(cage_path)
     else:
         cage = None
 
-    if osp.exists(osp.join(args.stress_dir, args.stress_name)):
-        stress = loadStress(osp.join(args.stress_dir, args.stress_name))
+    stress_path = Path(args.stress_dir) / args.stress_name
+    if stress_path.is_file():
+        stress = loadStress(stress_path)
     else:
         stress = None
 
@@ -40,9 +43,9 @@ if __name__ == "__main__":
             experiment = Experiment()
         except Exception as e:
             print(str(e))
-            experiment = virtualCometExperment()
+            experiment = virtualCometExperiment()
     else:
-        experiment = virtualCometExperment()
+        experiment = virtualCometExperiment()
 
     experiment.set_name(args.exp_name + "_" + args.id)
     experiment.add_tag(args.exp_name)

@@ -3,7 +3,7 @@ import torch
 import pyvista as pv
 import scipy.sparse as ssp
 
-from utils.quernion import *
+from utils.quaternion import *
 from utils.fileIO import *
 
 
