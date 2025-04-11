@@ -10,9 +10,9 @@ install:  # [tetgen] is AGPL, [pymeshlab] is GPL
 install-dev: install
 	@uv pip install ruff ipykernel pyvista[jupyter]
 
-lint:               ## Run black, isort, mypy, and other code checks.
+lint:  # Run code checks
 	@ruff check --fix
 	@ruff format .
 
-test: 
+generate-field: 
 	uv run python main.py --exp_name spiral_fish --mesh spiral_fish.tet --cage None --stress None --wSF 1 --wSR 0 --wSQ 0 --wOP 0 --wRigid 100 --wConstraints 5 --wScaling 10 --wQuaternion 10 --nstep 5000 --wQuaternion 0.01 --lock_bottom --beta 2

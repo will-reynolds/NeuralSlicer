@@ -37,7 +37,7 @@ Results live in in `data/results/{exp_name}/{date_time}`, where:
 ## Examples
 
 ### Step 1: Cage-based Field Generation
-Printing direction field optimisation via Neural Slicer: `make test`
+Printing direction field optimisation via Neural Slicer: `make generate-field`
 
 ### Step 2: Cage-based layers Generation [TO REVIEW]
 Then achieve the cage-based layers by S^3-Slicer.
