@@ -79,7 +79,7 @@ class ARAP_deformation:
             "wThickness": kwargs.get("wThickness", 1e2),
         }
 
-        self.paramaters = {
+        self.parameters = {
             "alpha": np.deg2rad(kwargs.get("alpha", 45)),
             "beta": np.deg2rad(kwargs.get("beta", 5)),
             "grammar": np.deg2rad(kwargs.get("grammar", 5)),
@@ -87,12 +87,12 @@ class ARAP_deformation:
             "maxStressPercent": 5,
             "theta": np.deg2rad(kwargs.get("theta", 45)),
         }
-        self.dp = torch.from_numpy(self.paramaters["dp"]).float().to(self.device)
+        self.dp = torch.from_numpy(self.parameters["dp"]).float().to(self.device)
         self.lockBottom = kwargs.get("lock_bottom", False)
 
         self.fillPoint = self.dp * 1e5
 
-        self.maxStressPercent = 1.0 - self.paramaters["maxStressPercent"] / 100
+        self.maxStressPercent = 1.0 - self.parameters["maxStressPercent"] / 100
         self.w_lattice = 1
         self.w_shell = 1
 
@@ -748,7 +748,7 @@ class ARAP_deformation:
             return torch.zeros(number_faces).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters["alpha"]
+        alpha = self.parameters["alpha"]
         boundaryNormal = getNormal(newVertices, self.mesh_boudary_face_idx)
         n_dot_dp = (boundaryNormal * dp.expand(number_faces, -1)).sum(1)
 
@@ -782,7 +782,7 @@ class ARAP_deformation:
             return torch.zeros(number_lattice).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters["alpha"]
+        alpha = self.parameters["alpha"]
         boundaryNormal = torch.nn.functional.normalize(
             newVertices[self.lattice_elem[:, 1]] - newVertices[self.lattice_elem[:, 0]],
             p=2,
@@ -803,7 +803,7 @@ class ARAP_deformation:
             return torch.zeros(number_tube).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters["alpha"]
+        alpha = self.parameters["alpha"]
         boundaryNormal = torch.nn.functional.normalize(
             newVertices[self.lattice_elem[:, 0]] - newVertices[self.lattice_elem[:, 1]]
         )
@@ -821,7 +821,7 @@ class ARAP_deformation:
             return torch.zeros(number_faces).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters["alpha"]
+        alpha = self.parameters["alpha"]
         boundaryNormal = getNormal(newVertices, self.shell_elem)
         n_dot_dp = (boundaryNormal * dp.expand(number_faces, -1)).sum(1)
 
@@ -859,7 +859,7 @@ class ARAP_deformation:
         flitter[Idx] = 1
 
         dp = self.dp
-        beta = self.paramaters["beta"]
+        beta = self.parameters["beta"]
         new_tau_max = torch.bmm(affine_matrix, self.tau_max.unsqueeze(-1)).squeeze(-1)
         new_tau_max = torch.nn.functional.normalize(new_tau_max, dim=1)
         dp_dot_tau = (
@@ -922,7 +922,7 @@ class ARAP_deformation:
         else:
             mesh_gradient = self.scalar2GradientMesh(newVertices[:, 1])
 
-        beta = self.paramaters["beta"]
+        beta = self.parameters["beta"]
         dp_dot_tau = (self.tau_max * mesh_gradient).sum(1)
 
         Idx = self.max5percent_tau_idx
@@ -941,7 +941,7 @@ class ARAP_deformation:
         if w < 1e-7:
             return torch.zeros(self.lattice_elem.shape[0]).float().to(self.device)
 
-        beta = self.paramaters["beta"]
+        beta = self.parameters["beta"]
         lpd = cage_gradient[self.lattice_weights_elem_idx[self.lattice_elem]].mean(
             axis=1
         )
@@ -956,7 +956,7 @@ class ARAP_deformation:
         w = self.weights["wSR_Shell"]
         if w < 1e-7:
             return torch.zeros(self.shell_elem.shape[0]).float().to(self.device)
-        beta = self.paramaters["beta"]
+        beta = self.parameters["beta"]
         lpd = cage_gradient[self.shell_weights_elem_idx[self.shell_elem]].mean(axis=1)
         dp_dot_tau = (self.shell_tau_max * lpd).sum(1)
 
@@ -970,7 +970,7 @@ class ARAP_deformation:
         if w < 1e-7:
             return torch.zeros(self.tube_elem.shape[0]).float().to(self.device)
 
-        beta = self.paramaters["beta"]
+        beta = self.parameters["beta"]
         lpd = cage_gradient[self.tube_weights_elem_idx[self.tube_elem]].mean(axis=1)
         dp_dot_tau = (self.tube_tau_max * lpd).sum(1)
 
@@ -986,7 +986,7 @@ class ARAP_deformation:
             return torch.zeros(number_faces).float().to(self.device)
 
         dp = self.dp
-        grammar = self.paramaters["grammar"]
+        grammar = self.parameters["grammar"]
         boundaryNormal = getNormal(newVertices, self.mesh_boudary_face_idx)
         n_dot_dp = (boundaryNormal * dp.expand(number_faces, -1)).sum(1)
         return self.sigmoid(n_dot_dp.abs(), math.sin(grammar))
@@ -1000,7 +1000,7 @@ class ARAP_deformation:
             loss = gradient.norm(dim=1).var()
             return w * loss
 
-    def printLimitionLossMesh(self, gradient):
+    def printLimitationLossMesh(self, gradient):
         w = self.weights["wThickness"]
         if w < 1e-7:
             return torch.tensor(0).float().to(gradient.device)
@@ -1008,7 +1008,7 @@ class ARAP_deformation:
             loss = (gradient.norm(dim=1) - 1).norm("fro").mean()
             return w * loss
 
-    def hardConstrains(self, gradient):
+    def hardConstraints(self, gradient):
         # printing direction
         _lambda = self.weights["_lambda"]
         pd, lc = 0, 0
@@ -1018,7 +1018,7 @@ class ARAP_deformation:
 
         # local collision-free
         if self.weights["localCollisionFree"]:
-            theta = self.paramaters["theta"]
+            theta = self.parameters["theta"]
             nLnR = gradient[self.mesh_elemAdjacent, :]  # n*2*3
             nL, nR = nLnR[:, 0, :], nLnR[:, 1, :]
             nLCrossnR = torch.linalg.cross(nL, nR)
@@ -1033,7 +1033,7 @@ class ARAP_deformation:
             return torch.zeros(number_edges).float().to(self.device)
 
         dp = self.dp
-        alpha = self.paramaters["alpha"]
+        alpha = self.parameters["alpha"]
         directions = getEdgeDirection(newVertices, self.mesh_boundary_edge)
         direction_dot_dp = (directions * dp.expand(number_edges, -1)).sum(1).abs()
         return (self.sigmoid(direction_dot_dp, math.sin(alpha)) - 1).mean() * w

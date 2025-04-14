@@ -1,4 +1,3 @@
-import os
 import numpy as np
 from scipy.spatial import KDTree
 import trimesh
@@ -24,12 +23,12 @@ class tetMesh:
 def loadTet(filePath):
     with open(filePath) as f:
         numofVertices = int(f.readline().split(" ")[0])
-        numofEles = int(f.readline().split(" ")[0])
+        numofElems = int(f.readline().split(" ")[0])
         v, e = list(), list()
         for i in range(numofVertices):
             slist = f.readline().split(" ")
             v.append([float(slist[0]), float(slist[1]), float(slist[2])])
-        for j in range(numofEles):
+        for j in range(numofElems):
             elist = f.readline().split(" ")
             e.append([int(elist[1]), int(elist[2]), int(elist[3]), int(elist[4])])
         mesh = tetMesh(np.asarray(v, dtype=float), np.asarray(e, dtype=int))

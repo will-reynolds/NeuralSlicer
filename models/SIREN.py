@@ -182,21 +182,21 @@ class TransformationWrapper(nn.Module):
                 dim_in=latent_dim, dim_hidden=net.dim_hidden, num_layers=net.num_layers
             )
 
-        self.rotaion_conv1 = torch.nn.Conv1d(latent_dim, latent_dim, 1)
-        self.rotaion_conv2 = torch.nn.Conv1d(latent_dim, latent_dim // 2, 1)
-        self.rotaion_conv3 = torch.nn.Conv1d(latent_dim // 2, latent_dim // 4, 1)
-        self.rotaion_conv4 = torch.nn.Conv1d(latent_dim // 4, 4, 1)
+        self.rotation_conv1 = torch.nn.Conv1d(latent_dim, latent_dim, 1)
+        self.rotation_conv2 = torch.nn.Conv1d(latent_dim, latent_dim // 2, 1)
+        self.rotation_conv3 = torch.nn.Conv1d(latent_dim // 2, latent_dim // 4, 1)
+        self.rotation_conv4 = torch.nn.Conv1d(latent_dim // 4, 4, 1)
 
-        self.rotaion_conv4.weight = nn.Parameter(torch.zeros(4, latent_dim // 4, 1))
-        self.rotaion_conv4.bias = nn.Parameter(torch.zeros(4))
+        self.rotation_conv4.weight = nn.Parameter(torch.zeros(4, latent_dim // 4, 1))
+        self.rotation_conv4.bias = nn.Parameter(torch.zeros(4))
         self.th = nn.Tanh()
 
     # add global rotation
-    def global_rotaion_forward(self, latent):
-        y = self.rotaion_conv1(latent.unsqueeze(-1))
-        y = self.rotaion_conv2(y)
-        y = self.rotaion_conv3(y)
-        y = self.th(self.rotaion_conv4(y)).squeeze(-1)
+    def global_rotation_forward(self, latent):
+        y = self.rotation_conv1(latent.unsqueeze(-1))
+        y = self.rotation_conv2(y)
+        y = self.rotation_conv3(y)
+        y = self.th(self.rotation_conv4(y)).squeeze(-1)
         return y
 
     def forward(self, pos, latent=None):
@@ -205,10 +205,8 @@ class TransformationWrapper(nn.Module):
             "latent vector must be only supplied if `latent_dim` was passed in on instantiation"
         )
 
-        mods = self.modulator(latent) if modulate else None
-
         qs = self.net(pos, mods=None)
-        rotation = self.global_rotaion_forward(latent) + torch.tensor([1, 0, 0, 0]).to(
+        rotation = self.global_rotation_forward(latent) + torch.tensor([1, 0, 0, 0]).to(
             latent.device
         )
         q = quaternion_multiply(rotation.expand(qs.shape[0], -1), qs[:, :4])
