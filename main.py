@@ -13,7 +13,6 @@ from utils.virtualCometExperiment import virtualCometExperiment
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 if __name__ == "__main__":
-    cmd = sys.argv
     # load kwargs
     parser = get_init_parser()
     args = parser.parse_args()
@@ -64,6 +63,5 @@ if __name__ == "__main__":
     # deformation optimization
     _do = deformationOptimization(mesh, cage, stress, **vars(args))
     _do.initCometLog(experiment)
-    _do.train(cmd)
 
     experiment.end()

@@ -4,6 +4,7 @@ import os
 import torch
 import torch.nn as nn
 import os.path as osp
+from pathlib import Path
 
 from models.arap_deformation import *
 import models.SIREN as SIREN
@@ -20,7 +21,17 @@ Processing
 
 
 class deformationOptimization:
-    def __init__(self, mesh, cage, stress, lattice=None, shell=None, **kwargs):
+    def __init__(
+        self,
+        mesh,
+        cage,
+        stress,
+        lattice=None,
+        shell=None,
+        wrapper=None,
+        latent=None,
+        **kwargs,
+    ):
         # mesh-cage-stress
         self.mesh = mesh
         self.cage = cage
@@ -49,9 +60,15 @@ class deformationOptimization:
             # different signals may require different omega_0 in the first layer - this is a hyperparameter
         )
         latent_dim = 64
-        self.latent = nn.Parameter(torch.zeros(latent_dim).normal_(0, 1)).float().cuda()
-        self.wrapper = SIREN.TransformationWrapper(
-            self.net, self.arap.elemCenter, latent_dim
+        self.latent = (
+            nn.Parameter(torch.zeros(latent_dim).normal_(0, 1)).float().cuda()
+            if latent is None
+            else latent
+        )
+        self.wrapper = (
+            SIREN.TransformationWrapper(self.net, self.arap.elemCenter, latent_dim)
+            if wrapper is None
+            else wrapper
         )
 
         # saving parameters
