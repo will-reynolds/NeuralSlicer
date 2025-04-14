@@ -168,6 +168,7 @@ class deformationOptimization:
             os.makedirs(save_dir)
 
         torch.save(self.wrapper, osp.join(save_dir, "last.ckpt"))
+        torch.save(self.latent, osp.join(save_dir, "latent.pt"))
         allNodes = self.arap.optMeshNodes.detach().numpy()
         boxS = allNodes.min(0)
         boxSize = allNodes.max(0) - boxS

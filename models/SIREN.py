@@ -3,9 +3,10 @@ from torch import nn
 import math
 import torch.nn.functional as F
 from einops import rearrange
-from utils.quernion import quaternion_multiply
+from utils.quaternion import quaternion_multiply
 
 # helpers
+
 
 def exists(val):
     return val is not None
@@ -17,7 +18,7 @@ def cast_tuple(val, repeat=1):
 
 # sin activation
 class Sine(nn.Module):
-    def __init__(self, w0=1.):
+    def __init__(self, w0=1.0):
         super().__init__()
         self.w0 = w0
 
@@ -27,16 +28,27 @@ class Sine(nn.Module):
 
 # siren layer
 
+
 class Siren(nn.Module):
     class Sine(nn.Module):
-        def __init__(self, w0=1.):
+        def __init__(self, w0=1.0):
             super().__init__()
             self.w0 = w0
 
         def forward(self, x):
             return torch.sin(self.w0 * x)
 
-    def __init__(self, dim_in, dim_out, w0=1., c=6., is_first=False, use_bias=True, activation=None, is_last=False):
+    def __init__(
+        self,
+        dim_in,
+        dim_out,
+        w0=1.0,
+        c=6.0,
+        is_first=False,
+        use_bias=True,
+        activation=None,
+        is_last=False,
+    ):
         super().__init__()
         self.dim_in = dim_in
         self.is_first = is_first
@@ -54,7 +66,7 @@ class Siren(nn.Module):
                 idenityDeformation = torch.tensor([1, 0, 0, 0, 1, 1, 1], dtype=float)
                 self.bias = nn.Parameter(idenityDeformation)
             else:
-                raise ('Cannot support the dim out init for the last layer')
+                raise ("Cannot support the dim out init for the last layer")
 
         self.activation = Sine(w0) if activation is None else activation
         # self.activation = nn.ReLU() if activation is None else activation
@@ -76,9 +88,19 @@ class Siren(nn.Module):
 
 # siren network
 
+
 class SirenNet(nn.Module):
-    def __init__(self, dim_in, dim_hidden, dim_out, num_layers, w0=1., w0_initial=30., use_bias=True,
-                 final_activation=None):
+    def __init__(
+        self,
+        dim_in,
+        dim_hidden,
+        dim_out,
+        num_layers,
+        w0=1.0,
+        w0_initial=30.0,
+        use_bias=True,
+        final_activation=None,
+    ):
         super().__init__()
         self.num_layers = num_layers
         self.dim_hidden = dim_hidden
@@ -89,17 +111,27 @@ class SirenNet(nn.Module):
             layer_w0 = w0_initial if is_first else w0
             layer_dim_in = dim_in if is_first else dim_hidden
 
-            self.layers.append(Siren(
-                dim_in=layer_dim_in,
-                dim_out=dim_hidden,
-                w0=layer_w0,
-                use_bias=use_bias,
-                is_first=is_first
-            ))
+            self.layers.append(
+                Siren(
+                    dim_in=layer_dim_in,
+                    dim_out=dim_hidden,
+                    w0=layer_w0,
+                    use_bias=use_bias,
+                    is_first=is_first,
+                )
+            )
 
-        final_activation = nn.Identity() if not exists(final_activation) else final_activation
-        self.last_layer = Siren(dim_in=dim_hidden, dim_out=dim_out, w0=w0, use_bias=use_bias,
-                                activation=final_activation, is_last=True)
+        final_activation = (
+            nn.Identity() if not exists(final_activation) else final_activation
+        )
+        self.last_layer = Siren(
+            dim_in=dim_hidden,
+            dim_out=dim_out,
+            w0=w0,
+            use_bias=use_bias,
+            activation=final_activation,
+            is_last=True,
+        )
 
     def forward(self, x, mods=None):
         mods = cast_tuple(mods, self.num_layers)
@@ -109,7 +141,7 @@ class SirenNet(nn.Module):
             x = layer(x)
 
             if exists(mod):
-               x *= rearrange(mod, 'd -> () d')
+                x *= rearrange(mod, "d -> () d")
 
         return self.last_layer(x)
 
@@ -123,10 +155,7 @@ class Modulator(nn.Module):
             is_first = ind == 0
             dim = dim_in if is_first else (dim_hidden + dim_in)
 
-            self.layers.append(nn.Sequential(
-                nn.Linear(dim, dim_hidden),
-                nn.ReLU()
-            ))
+            self.layers.append(nn.Sequential(nn.Linear(dim, dim_hidden), nn.ReLU()))
 
     def forward(self, z):
         x = z
@@ -150,9 +179,7 @@ class TransformationWrapper(nn.Module):
 
         if exists(latent_dim):
             self.modulator = Modulator(
-                dim_in=latent_dim,
-                dim_hidden=net.dim_hidden,
-                num_layers=net.num_layers
+                dim_in=latent_dim, dim_hidden=net.dim_hidden, num_layers=net.num_layers
             )
 
         self.rotaion_conv1 = torch.nn.Conv1d(latent_dim, latent_dim, 1)
@@ -173,18 +200,20 @@ class TransformationWrapper(nn.Module):
         return y
 
     def forward(self, pos, latent=None):
-
         modulate = exists(self.modulator)
-        assert not (modulate ^ exists(
-            latent)), 'latent vector must be only supplied if `latent_dim` was passed in on instantiation'
+        assert not (modulate ^ exists(latent)), (
+            "latent vector must be only supplied if `latent_dim` was passed in on instantiation"
+        )
 
         mods = self.modulator(latent) if modulate else None
 
         qs = self.net(pos, mods=None)
-        rotation = self.global_rotaion_forward(latent) + torch.tensor([1, 0, 0, 0]).to(latent.device)
+        rotation = self.global_rotaion_forward(latent) + torch.tensor([1, 0, 0, 0]).to(
+            latent.device
+        )
         q = quaternion_multiply(rotation.expand(qs.shape[0], -1), qs[:, :4])
         s = qs[:, 4:]
-        return torch.hstack((q,s))
+        return torch.hstack((q, s))
 
 
 class FlowingWrapper(nn.Module):
