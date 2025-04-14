@@ -5,7 +5,7 @@ rmenv:
 	@rm -rf .venv
 
 install:  # [tetgen] is AGPL, [pymeshlab] is GPL
-	@uv pip install torch tqdm numpy scipy pymeshlab pyvista tetgen trimesh einops 
+	@uv pip install torch tqdm numpy scipy pymeshlab pyvista tetgen trimesh einops comet_ml 
 
 install-dev: install
 	@uv pip install ruff ipykernel pyvista[jupyter]
